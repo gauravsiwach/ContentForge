@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Python virtual environment
+backend/venv/
+backend/.env
+
+# SQLite database
+*.db
+*.sqlite3
+
+# Node / React
+node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Vite
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build artifacts
+*.tsbuildinfo
+
+# Assets (Vite boilerplate)
+frontend/src/assets/hero.png
+frontend/src/assets/react.svg
+frontend/src/assets/vite.svg
