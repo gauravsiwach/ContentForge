@@ -9,9 +9,11 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
 import DownloadIcon from '@mui/icons-material/Download';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import useWizardStore from '../../store/wizardStore';
 import { listAttempts } from '../../api/steps';
+import { completeProject } from '../../api/projects';
 import { exportProject } from '../../api/export';
 import { API_BASE_URL } from '../../api/client';
 import { gradientButton } from '../../theme/glassStyles';
@@ -36,12 +38,13 @@ const REEL_FORMATS: { value: ProjectFormat; label: string }[] = [
 ];
 
 export default function ReviewStep() {
-  const { project, dbSteps, setPlatform, setFormat, saveProjectUpdates } = useWizardStore();
+  const { project, dbSteps, setPlatform, setFormat, saveProjectUpdates, setProject, completeStep, steps } = useWizardStore();
   const [captionText, setCaptionText] = useState<string | null>(null);
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [finishing, setFinishing] = useState(false);
 
   const captionStepId = dbSteps.find((s) => s.step_name === 'caption')?.id;
   const visualsStepId = dbSteps.find((s) => s.step_name === 'visuals')?.id;
@@ -88,6 +91,22 @@ export default function ReviewStep() {
       setSnackbar('Select a caption and an image before exporting.');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleFinish = async () => {
+    if (!project || project.status === 'completed') return;
+    setFinishing(true);
+    try {
+      const completedProject = await completeProject(project.id);
+      setProject(completedProject);
+      const reviewIndex = steps.findIndex((step) => step.name === 'review');
+      if (reviewIndex >= 0) completeStep(reviewIndex);
+      setSnackbar('Project accepted and marked as complete.');
+    } catch {
+      setSnackbar('Could not finish the project. Complete the earlier steps first.');
+    } finally {
+      setFinishing(false);
     }
   };
 
@@ -173,12 +192,22 @@ export default function ReviewStep() {
         <Button
           variant="contained"
           sx={gradientButton}
-          startIcon={<DownloadIcon />}
-          onClick={handleExport}
-          disabled={exporting || !imageSrc || !captionText}
+          startIcon={<CheckCircleIcon />}
+          onClick={handleFinish}
+          disabled={finishing || project?.status === 'completed'}
         >
-          {exporting ? 'Exporting...' : 'Download'}
+          {finishing ? 'Finishing...' : project?.status === 'completed' ? 'Finished' : 'Accept & Finish'}
         </Button>
+        {imageSrc && captionText && (
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleExport}
+            disabled={exporting}
+          >
+            {exporting ? 'Exporting...' : 'Download'}
+          </Button>
+        )}
         <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={handleCopyCaption} disabled={!captionText}>
           Copy Caption
         </Button>

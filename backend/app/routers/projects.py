@@ -93,6 +93,36 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
     return {"detail": "Project deleted"}
 
 
+@router.post("/{project_id}/complete", response_model=ProjectResponse)
+def complete_project(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    review_step = next((step for step in project.steps if step.step_name == "review"), None)
+    if not review_step:
+        raise HTTPException(status_code=400, detail="Project has no review step")
+    if project.current_step != "review":
+        raise HTTPException(status_code=400, detail="Project can only be completed from the review step")
+
+    unfinished_steps = [
+        step.step_name
+        for step in project.steps
+        if step.step_order < review_step.step_order and step.status not in ("completed", "skipped")
+    ]
+    if unfinished_steps:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Complete or skip all earlier steps before finishing: {', '.join(unfinished_steps)}",
+        )
+
+    review_step.status = "completed"
+    project.status = "completed"
+    db.commit()
+    db.refresh(project)
+    return project
+
+
 @router.post("/{project_id}/navigate", response_model=ProjectResponse)
 def navigate_project(project_id: str, data: NavigateRequest, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()

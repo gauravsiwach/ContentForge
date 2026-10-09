@@ -41,6 +41,11 @@ export async function getProject(id: string): Promise<ProjectResponse> {
   return data;
 }
 
+export async function completeProject(id: string): Promise<ProjectResponse> {
+  const { data } = await apiClient.post<ProjectResponse>(`/api/projects/${id}/complete`);
+  return data;
+}
+
 export async function updateProject(
   id: string,
   updates: { category?: string; platform?: string; format?: string },

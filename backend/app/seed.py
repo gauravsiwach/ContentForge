@@ -12,6 +12,7 @@ SEED_CATEGORIES = [
     {"name": "Education", "icon": "school", "keywords": ["learning", "teaching", "study", "knowledge", "course"]},
     {"name": "Business", "icon": "business", "keywords": ["startup", "entrepreneur", "marketing", "finance", "growth"]},
     {"name": "Lifestyle", "icon": "self_improvement", "keywords": ["lifestyle", "wellness", "mindset", "motivation", "habits"]},
+    {"name": "Motivation", "icon": "psychology", "keywords": ["motivation", "inspiration", "mindset", "success", "goals"]},
 ]
 
 
@@ -19,16 +20,16 @@ def seed_categories():
     create_tables()
     db = SessionLocal()
     try:
-        existing = db.query(Category).count()
-        if existing > 0:
-            print(f"Categories already seeded ({existing} found). Skipping.")
-            return
-
+        existing_names = {name for (name,) in db.query(Category.name).all()}
+        added = 0
         for cat_data in SEED_CATEGORIES:
+            if cat_data["name"] in existing_names:
+                continue
             cat = Category(**cat_data)
             db.add(cat)
+            added += 1
         db.commit()
-        print(f"Seeded {len(SEED_CATEGORIES)} categories.")
+        print(f"Added {added} missing categories ({len(existing_names) + added} total).")
     finally:
         db.close()
 

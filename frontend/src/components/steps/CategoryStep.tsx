@@ -14,6 +14,7 @@ import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import SchoolIcon from '@mui/icons-material/School';
 import BusinessIcon from '@mui/icons-material/Business';
 import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import useWizardStore from '../../store/wizardStore';
 import { fetchCategories } from '../../api/projects';
 import type { Category } from '../../types';
@@ -27,6 +28,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   school: SchoolIcon,
   business: BusinessIcon,
   self_improvement: SelfImprovementIcon,
+  psychology: PsychologyIcon,
 };
 
 export default function CategoryStep() {

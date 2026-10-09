@@ -1,169 +1,222 @@
 # ContentForge
 
-AI-powered social media content creation tool. Create viral image posts and reels through a guided wizard workflow.
+ContentForge is a local-first AI workspace for creating social-media content. It guides a project through category selection, Viral DNA discovery, trend ideas, copy, image generation, and final review in one workflow.
 
-## Project Structure
+The goal is to create content on your own machine without requiring a paid API. Text and optional vision analysis run through [Ollama](https://ollama.com/); image generation runs through [ComfyUI](https://www.comfy.org/) using the bundled **Z-Image Turbo** API workflow. Project data is stored locally in SQLite and generated images are saved locally by the backend.
 
-```
-ContentForge/
-├── backend/          # FastAPI + SQLAlchemy + SQLite
-│   ├── app/
-│   │   ├── main.py           # FastAPI app entry point
-│   │   ├── config.py         # Settings (env vars, DB URL, CORS)
-│   │   ├── database.py       # SQLAlchemy engine + session
-│   │   ├── seed.py           # Seed categories into DB
-│   │   ├── models/           # SQLAlchemy models
-│   │   ├── schemas/          # Pydantic request/response schemas
-│   │   ├── routers/          # API route handlers
-│   │   └── services/         # Business logic (workflow, steps)
-│   ├── requirements.txt
-│   └── venv/                 # Python 3.11 virtual environment
-├── frontend/         # React + Vite + MUI (Dark Glassmorphism)
-│   ├── src/
-│   │   ├── App.tsx            # Root component (ThemeProvider + Router)
-│   │   ├── main.tsx           # Entry point
-│   │   ├── theme/             # MUI glassmorphism theme + glass style helpers
-│   │   ├── types/             # TypeScript type definitions
-│   │   ├── store/             # Zustand state management
-│   │   ├── api/               # Axios API client
-│   │   ├── pages/             # Route pages (Home, Project, Settings)
-│   │   └── components/        # UI components
-│   │       ├── layout/        # AppLayout, AppHeader
-│   │       ├── wizard/        # WizardLayout, StepProgress, StepNavigator
-│   │       ├── steps/         # Step components (Category, placeholders)
-│   │       └── preview/       # Preview panel
-│   └── package.json
-└── Docs/             # PRD + HLD documentation
+> The app still contains optional cloud-provider support, but the setup below uses only local services and does not need an API key.
+
+## How the local workflow works
+
+```text
+Browser (React / Vite, :5173)
+             |
+             v
+ContentForge API (FastAPI, :8000) ──> SQLite + local assets
+             |                         (backend/contentforge.db, backend/assets/)
+             |
+             +──> Ollama (:11434) — text and vision
+             |
+             +──> ComfyUI (:8188) — Z-Image Turbo image generation
 ```
 
-## Tech Stack
+For image projects, ContentForge injects the generated image prompt into [`backend/app/workflows/z_image_turbo_api.json`](backend/app/workflows/z_image_turbo_api.json), submits it to ComfyUI, waits for the result, then saves a copy under `backend/assets/` for the project to display and export.
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, Vite, MUI v9, Zustand, Axios, TypeScript |
-| Backend | FastAPI, SQLAlchemy 2.0, SQLite, Pydantic v2, Python 3.11 |
-| Theme | Dark Glassmorphism — frosted glass cards, neon glows, gradient accents |
+## Features
 
-## Quick Start
+- Guided workflow for image posts and the foundation for reels
+- Local AI provider settings for text, vision, and images
+- Ollama-backed text generation and optional vision analysis
+- Viral DNA profile to carry visual style, mood, hooks, and CTA style into later steps
+- ComfyUI image generation with live progress where ComfyUI provides it
+- Local SQLite storage, generated asset storage, and project export
 
-### Prerequisites
+## Requirements
 
-- **Node.js** >= 18
-- **Python** 3.11 (3.14 not supported by pydantic-core)
-- **npm**
+- Node.js 18+
+- Python 3.11+
+- [Ollama](https://ollama.com/) running locally
+- [ComfyUI](https://www.comfy.org/) running locally for image generation
+- A machine with enough RAM/VRAM for the Ollama model and Z-Image Turbo model you choose
 
-### 1. Clone & enter the project
+## Setup 1 — Run ContentForge
+
+### 1. Clone and enter the repository
 
 ```bash
+git clone <your-repository-url>
 cd ContentForge
 ```
 
-### 2. Start the Backend
+### 2. Start Ollama
+
+Install Ollama, then download at least one text model. Use the model name you download later in ContentForge Settings.
+
+```bash
+ollama serve
+ollama pull gemma3:4b
+```
+
+`ollama serve` is unnecessary if the Ollama desktop app/service is already running. Confirm that it is reachable:
+
+```bash
+curl http://127.0.0.1:11434/v1/models
+```
+
+For optional local vision analysis, pull and configure an Ollama vision-capable model as well. If no vision model is configured, the Viral DNA step uses its built-in fallback profile instead of a paid vision API.
+
+### 3. Start the backend
+
+Open a terminal:
 
 ```bash
 cd backend
 
-# Create virtual environment (first time only)
+# First time only
 python3.11 -m venv venv
-
-# Activate venv
-source venv/bin/activate        # macOS/Linux
-# venv\Scripts\activate         # Windows
-
-# Install dependencies (first time only)
+source venv/bin/activate
 pip install -r requirements.txt
 
-# Start the server
+# Start FastAPI
 uvicorn app.main:app --reload
 ```
 
-The backend will start on **http://localhost:8000**.
-- Swagger UI: http://localhost:8000/docs
-- On first startup, tables are auto-created and categories are seeded.
+The backend starts at [http://localhost:8000](http://localhost:8000).
 
-### 3. Start the Frontend
+- API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Local database: `backend/contentforge.db`
+- Generated assets: `backend/assets/`
 
-Open a new terminal:
+On first launch the database tables and default content categories are created automatically.
+
+### 4. Start the frontend
+
+Open a second terminal from the repository root:
 
 ```bash
 cd frontend
 
-# Install dependencies (first time only)
+# First time only
 npm install
 
-# Start dev server
+# Start Vite
 npm run dev
 ```
 
-The frontend will start on **http://localhost:5173**.
+Open [http://localhost:5173](http://localhost:5173).
 
-### 4. Open the App
+### 5. Configure local providers in the app
 
-Visit **http://localhost:5173** in your browser. You should see:
-- Dark glassmorphism theme with ambient purple/cyan background
-- "New Image Post" and "New Reel" glass cards
-- Clicking either starts a wizard with stepper navigation
+Open **Settings** in ContentForge and set each provider to **Local**:
 
-## API Endpoints (Phase 1)
+| Task | Provider | Base URL | Model |
+|---|---|---|---|
+| Text | Ollama | `http://127.0.0.1:11434` | Your installed text model, e.g. `gemma3:4b` |
+| Vision | Ollama | `http://127.0.0.1:11434` | Your installed vision model, if used |
+| Image | ComfyUI | `http://127.0.0.1:8188` | Not required; the saved workflow selects Z-Image Turbo |
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Health check |
-| `POST` | `/api/projects` | Create a new project (image or reel) |
-| `GET` | `/api/projects` | List all projects |
-| `GET` | `/api/projects/:id` | Get project with steps |
-| `PUT` | `/api/projects/:id` | Update project (category, platform, format) |
-| `DELETE` | `/api/projects/:id` | Delete a project |
-| `POST` | `/api/projects/:id/navigate` | Navigate to a step (with step-back invalidation) |
-| `GET` | `/api/categories` | List seeded categories |
+Use **Test connection** for each provider. The image-provider test calls ComfyUI's `/system_stats` endpoint.
 
-## Development
+## Setup 2 — Install and configure ComfyUI for Z-Image Turbo
 
-### Backend
+ContentForge talks to ComfyUI's local API. It expects ComfyUI at `http://127.0.0.1:8188` and ships an API-format workflow at [`backend/app/workflows/z_image_turbo_api.json`](backend/app/workflows/z_image_turbo_api.json).
+
+### 1. Install and start ComfyUI
+
+Install ComfyUI Desktop or a local ComfyUI installation, then start it. Keep it running while you generate images in ContentForge.
+
+Verify the server:
 
 ```bash
-cd backend && source venv/bin/activate
-
-# Run server with auto-reload
-uvicorn app.main:app --reload
-
-# Seed categories manually (if needed)
-python -m app.seed
+curl http://127.0.0.1:8188/system_stats
 ```
 
-### Frontend
+If you run ComfyUI on another host or port, add this to `backend/.env` before starting the backend:
 
-```bash
-cd frontend
-
-# Dev server with HMR
-npm run dev
-
-# Type check
-npx tsc --noEmit
-
-# Build for production
-npm run build
+```env
+COMFYUI_BASE_URL=http://127.0.0.1:8188
 ```
 
-### Environment Variables
+### 2. Install the model files required by the saved workflow
 
-Create `backend/.env` (optional):
+The included Z-Image Turbo workflow expects these files in the corresponding ComfyUI model folders:
+
+| Required file | ComfyUI folder |
+|---|---|
+| `z_image_turbo_bf16.safetensors` | `models/diffusion_models/` |
+| `qwen_3_4b.safetensors` | `models/text_encoders/` |
+| `ae.safetensors` | `models/vae/` |
+
+Download compatible Z-Image Turbo model components from their official model source, place them in those folders, then restart ComfyUI. The workflow uses core ComfyUI nodes: `UNETLoader`, `CLIPLoader`, `VAELoader`, `KSampler`, `VAEDecode`, and `SaveImage`.
+
+### 3. Verify the workflow in ComfyUI before using ContentForge
+
+1. Open ComfyUI.
+2. Load the Z-Image Turbo workflow you tested in ComfyUI, or import the repository workflow file.
+3. Enter a short prompt and run it once in ComfyUI.
+4. Confirm an image is produced without missing-node or missing-model errors.
+5. Export/save the workflow in **API format** if you make changes, then replace `backend/app/workflows/z_image_turbo_api.json`.
+
+ContentForge currently injects its prompt into workflow node `57:27` and reads the first `SaveImage` output. If you replace the workflow with one that changes those nodes, update [`backend/app/ai/comfyui_client.py`](backend/app/ai/comfyui_client.py) to match the new prompt node and output behavior.
+
+### 4. Test from ContentForge
+
+1. In ContentForge Settings, set **Image** to **ComfyUI (local)** with base URL `http://127.0.0.1:8188`.
+2. Click **Test connection**.
+3. Create an Image Post project and proceed to the Image step.
+4. Generate one image. ContentForge queues the workflow in ComfyUI, monitors completion, and copies the generated image into `backend/assets/`.
+
+## Configuration
+
+Create `backend/.env` only if you need to override defaults:
 
 ```env
 DATABASE_URL=sqlite:///./contentforge.db
 CORS_ORIGINS=["http://localhost:5173","http://localhost:5174"]
+COMFYUI_BASE_URL=http://127.0.0.1:8188
 DEBUG=true
 ```
 
-Create `frontend/.env` (optional):
+Optional frontend override in `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8000
 ```
 
-## Current Status
+## Local troubleshooting
 
-**Phase 1: Skeleton** — Complete (BE + FE)
+| Symptom | Check |
+|---|---|
+| Ollama connection fails | Run `ollama serve` (or start Ollama Desktop), then check `http://127.0.0.1:11434/v1/models`. |
+| ComfyUI connection fails | Start ComfyUI and check `curl http://127.0.0.1:8188/system_stats`. |
+| ComfyUI has missing model errors | Verify the three filenames and folders listed above, then restart ComfyUI. |
+| Image remains queued | Open ComfyUI and inspect its queue/errors; ContentForge only waits for the local workflow response. |
+| A custom workflow does not receive the prompt | Ensure the prompt node ID in `comfyui_client.py` matches your API workflow. |
 
-See [Docs/contentforge-hld.md](Docs/contentforge-hld.md) Section 9 for detailed implementation log.
+## Project structure
+
+```text
+ContentForge/
+├── backend/
+│   ├── app/
+│   │   ├── ai/           # Ollama, ComfyUI, text, vision, and image clients
+│   │   ├── routers/      # FastAPI endpoints
+│   │   ├── services/     # Workflow and step state
+│   │   └── workflows/    # Saved ComfyUI API workflow
+│   ├── assets/           # Generated local media
+│   └── contentforge.db   # Local SQLite database (created at runtime)
+├── frontend/             # React + Vite UI
+└── Docs/                 # Product and architecture notes
+```
+
+## Development commands
+
+```bash
+# Backend
+cd backend && source venv/bin/activate
+uvicorn app.main:app --reload
+
+# Frontend
+cd frontend
+npm run dev
+```
