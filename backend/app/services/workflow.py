@@ -10,6 +10,14 @@ from app.services.steps import get_steps_for_type
 def reconcile_project_step_statuses(db: Session, project: Project) -> bool:
     """Align persisted statuses with inputs and successful outputs."""
     changed = False
+    for post in project.posts:
+        post_step_names = {step.step_name for step in post.steps}
+        if post_step_names and post.current_step not in post_step_names:
+            project_step = project.current_step if project.current_step in post_step_names else None
+            first_post_step = min(post.steps, key=lambda step: step.step_order)
+            post.current_step = project_step or first_post_step.step_name
+            changed = True
+
     for step in project.steps:
         if step.status in ("skipped", "needs_refresh"):
             continue
@@ -22,11 +30,12 @@ def reconcile_project_step_statuses(db: Session, project: Project) -> bool:
         elif step.step_name == "trends" and (step.input_data or {}).get("selected_topic"):
             has_result = True
 
+        owner_current_step = step.post.current_step if step.post_id and step.post else project.current_step
         desired_status = (
             "completed"
             if has_result
             else "in_progress"
-            if step.step_name == project.current_step
+            if step.step_name == owner_current_step
             else "pending"
         )
         if step.status != desired_status:

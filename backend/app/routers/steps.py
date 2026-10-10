@@ -15,6 +15,7 @@ from app.schemas.step import StepResponse
 from app.routers.settings import get_or_create_provider
 from app.ai.text import generate_content, generate_trends, generate_script
 from app.ai.image import generate_images, build_image_prompt
+from app.services.trends import upsert_project_trends, select_trend_for_post
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/steps", tags=["steps"])
@@ -82,6 +83,17 @@ def _get_project_for_step(db: Session, step: ProjectStep) -> Project:
     return project
 
 
+def _mark_post_in_progress(step: ProjectStep) -> None:
+    if step.post is not None and step.post.status != "completed":
+        step.post.status = "in_progress"
+
+
+def _append_trend_candidates(db: Session, step: ProjectStep, output: dict) -> None:
+    if step.step_name != "trends":
+        return
+    upsert_project_trends(db, step.project_id, output.get("topics", []))
+
+
 def _get_dna_profile(db: Session, project: Project) -> dict | None:
     if not project.viral_dna_id:
         return None
@@ -89,22 +101,28 @@ def _get_dna_profile(db: Session, project: Project) -> dict | None:
     return profile.dna_data if profile else None
 
 
-def _get_step_by_name(db: Session, project_id: str, step_name: str) -> ProjectStep | None:
+def _get_step_by_name(
+    db: Session, project_id: str, step_name: str, post_id: str | None = None
+) -> ProjectStep | None:
     return (
         db.query(ProjectStep)
-        .filter(ProjectStep.project_id == project_id, ProjectStep.step_name == step_name)
+        .filter(
+            ProjectStep.project_id == project_id,
+            ProjectStep.step_name == step_name,
+            ProjectStep.post_id == post_id,
+        )
         .first()
     )
 
 
-def _get_selected_trend(db: Session, project_id: str) -> str | None:
-    step = _get_step_by_name(db, project_id, "trends")
+def _get_selected_trend(db: Session, step_context: ProjectStep) -> str | None:
+    step = _get_step_by_name(db, step_context.project_id, "trends", step_context.post_id)
     return (step.input_data or {}).get("selected_topic") if step else None
 
 
-def _get_selected_caption_text(db: Session, project_id: str) -> str | None:
+def _get_selected_caption_text(db: Session, step_context: ProjectStep) -> str | None:
     """Return the approved overlay_text from the content step for use in image prompt building."""
-    step = _get_step_by_name(db, project_id, "caption")
+    step = _get_step_by_name(db, step_context.project_id, "caption", step_context.post_id)
     if not step:
         return None
     # Use selected attempt or latest
@@ -158,6 +176,7 @@ async def _run_visual_generation_job(job_id: str, step_id: str, enhancement: str
     try:
         step = _get_step_or_404(db, step_id)
         step.status = "in_progress"
+        _mark_post_in_progress(step)
         db.commit()
         attempt_number = _next_attempt_number(db, step_id)
         output = await _generate_output_for_step(
@@ -231,6 +250,7 @@ async def generate(
         return _start_visual_generation_job(step_id)
 
     step.status = "in_progress"
+    _mark_post_in_progress(step)
     db.commit()
     attempt_number = _next_attempt_number(db, step_id)
 
@@ -244,12 +264,13 @@ async def generate(
         output_data=output,
     )
     db.add(attempt)
+    _append_trend_candidates(db, step, output)
     step.status = "completed"
     db.commit()
     db.refresh(attempt)
 
     if step.step_name == "script":
-        _sync_scene_items_from_script(db, step.project_id, output.get("scenes", []))
+        _sync_scene_items_from_script(db, step.project_id, output.get("scenes", []), step.post_id)
 
     return AttemptResponse.model_validate(attempt)
 
@@ -267,6 +288,7 @@ async def retry(
         return _start_visual_generation_job(step_id, data.enhancement)
 
     step.status = "in_progress"
+    _mark_post_in_progress(step)
     db.commit()
     attempt_number = _next_attempt_number(db, step_id)
 
@@ -281,12 +303,13 @@ async def retry(
         output_data=output,
     )
     db.add(attempt)
+    _append_trend_candidates(db, step, output)
     step.status = "completed"
     db.commit()
     db.refresh(attempt)
 
     if step.step_name == "script":
-        _sync_scene_items_from_script(db, step.project_id, output.get("scenes", []))
+        _sync_scene_items_from_script(db, step.project_id, output.get("scenes", []), step.post_id)
 
     return AttemptResponse.model_validate(attempt)
 
@@ -315,6 +338,7 @@ def select_attempt(step_id: str, data: SelectRequest, db: Session = Depends(get_
     attempt.is_selected = True
     step.selected_attempt_id = attempt.id
     step.status = "completed"
+    _mark_post_in_progress(step)
     db.commit()
     db.refresh(attempt)
     return attempt
@@ -324,7 +348,21 @@ def select_attempt(step_id: str, data: SelectRequest, db: Session = Depends(get_
 def update_step_data(step_id: str, data: UpdateStepDataRequest, db: Session = Depends(get_db)):
     """Persist inline edits/selections (e.g. selected trend, caption variant, style preset)."""
     step = _get_step_or_404(db, step_id)
+    selected_topic = data.input_data.get("selected_topic")
+    if step.step_name == "trends" and isinstance(selected_topic, str) and selected_topic.strip() and step.post:
+        trend = upsert_project_trends(
+            db,
+            step.project_id,
+            [{"topic": selected_topic.strip()}],
+            source="custom",
+        )[0]
+        try:
+            select_trend_for_post(db, step.post, trend)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     step.input_data = {**(step.input_data or {}), **data.input_data}
+    _mark_post_in_progress(step)
     if step.step_name == "trends" and data.input_data.get("selected_topic"):
         step.status = "completed"
     db.commit()
@@ -355,14 +393,14 @@ async def _generate_output_for_step(
     if step.step_name == "caption":
         settings = get_or_create_provider(db, "text")
         dna_profile = _get_dna_profile(db, project)
-        trend_topic = _get_selected_trend(db, project.id)
+        trend_topic = _get_selected_trend(db, step)
         data = await generate_content(settings, category, platform, dna_profile, trend_topic, enhancement)
         return {"type": "content", "_provider": settings.provider, "_model": settings.model, **data}
 
     if step.step_name == "visuals":
         settings = get_or_create_provider(db, "image")
         dna_profile = _get_dna_profile(db, project)
-        caption_text = _get_selected_caption_text(db, project.id)
+        caption_text = _get_selected_caption_text(db, step)
         style_preset = (step.input_data or {}).get("style_preset", "minimal")
         prompt = build_image_prompt(category, caption_text, dna_profile, style_preset, enhancement)
         images = await generate_images(
@@ -380,7 +418,7 @@ async def _generate_output_for_step(
     if step.step_name == "script":
         settings = get_or_create_provider(db, "text")
         dna_profile = _get_dna_profile(db, project)
-        trend_topic = _get_selected_trend(db, project.id)
+        trend_topic = _get_selected_trend(db, step)
         duration_target = (step.input_data or {}).get("duration_target", 30)
         data = await generate_script(settings, category, platform, duration_target, dna_profile, trend_topic, enhancement)
         return {"type": "script", "_provider": settings.provider, "_model": settings.model, **data}
@@ -389,9 +427,16 @@ async def _generate_output_for_step(
     return _mock_output_for_step(step.step_name, variation)
 
 
-def _sync_scene_items_from_script(db: Session, project_id: str, scenes: list[dict]) -> None:
-    """Replace this project's scene_items with the freshly generated script scenes."""
-    existing = {s.scene_number: s for s in db.query(SceneItem).filter(SceneItem.project_id == project_id).all()}
+def _sync_scene_items_from_script(
+    db: Session, project_id: str, scenes: list[dict], post_id: str | None = None
+) -> None:
+    """Replace this workflow's scene items with freshly generated script scenes."""
+    existing = {
+        scene.scene_number: scene
+        for scene in db.query(SceneItem)
+        .filter(SceneItem.project_id == project_id, SceneItem.post_id == post_id)
+        .all()
+    }
 
     for scene in scenes:
         number = scene.get("scene_number") or scene.get("order")
@@ -399,7 +444,7 @@ def _sync_scene_items_from_script(db: Session, project_id: str, scenes: list[dic
             continue
         item = existing.pop(number, None)
         if not item:
-            item = SceneItem(project_id=project_id, scene_number=number)
+            item = SceneItem(project_id=project_id, post_id=post_id, scene_number=number)
             db.add(item)
         item.narration = scene.get("narration", "")
         item.visual_desc = scene.get("visual_desc", "")
@@ -410,7 +455,7 @@ def _sync_scene_items_from_script(db: Session, project_id: str, scenes: list[dic
         db.delete(leftover)
 
     # A regenerated script invalidates any already-generated scene images
-    scene_images_step = _get_step_by_name(db, project_id, "scene_images")
+    scene_images_step = _get_step_by_name(db, project_id, "scene_images", post_id)
     if scene_images_step and scene_images_step.status == "completed":
         scene_images_step.status = "needs_refresh"
 

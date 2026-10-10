@@ -14,6 +14,7 @@ import ScriptStep from '../components/steps/ScriptStep';
 import SceneImagesStep from '../components/steps/SceneImagesStep';
 import PlaceholderStep from '../components/steps/PlaceholderStep';
 import PreviewPanel from '../components/preview/PreviewPanel';
+import PostSwitcher from '../components/posts/PostSwitcher';
 import useWizardStore from '../store/wizardStore';
 
 const STEP_CONFIGS: Record<string, { title: string; description: string }> = {
@@ -34,18 +35,18 @@ const STEP_CONFIGS: Record<string, { title: string; description: string }> = {
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { project, steps, dbSteps, currentStepIndex, loadProjectFromApi } = useWizardStore();
+  const { project, steps, dbSteps, currentStepIndex, activePost, loadProjectFromApi } = useWizardStore();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!project && id) {
+    if (id && project?.id !== id) {
       setLoading(true);
       loadProjectFromApi(id).then((success) => {
         setLoading(false);
         if (!success) navigate('/');
       });
     }
-  }, [project, id, navigate, loadProjectFromApi]);
+  }, [project?.id, id, navigate, loadProjectFromApi]);
 
   if (loading) {
     return (
@@ -69,11 +70,22 @@ export default function ProjectPage() {
       case 'viral_dna':
         return <ViralDnaStep />;
       case 'trends':
-        return <TrendsStep stepId={currentDbStep?.id} />;
+        return (
+          <TrendsStep
+            key={`${currentDbStep?.id ?? ''}-${activePost?.id ?? ''}`}
+            stepId={currentDbStep?.id}
+            projectId={project.id}
+            postId={activePost?.id}
+            selectedTrendId={activePost?.selected_trend_id ?? null}
+            selectedTopic={typeof currentDbStep?.input_data?.selected_topic === 'string'
+              ? currentDbStep.input_data.selected_topic
+              : null}
+          />
+        );
       case 'caption':
-        return <CaptionStep stepId={currentDbStep?.id} />;
+        return <CaptionStep key={currentDbStep?.id} stepId={currentDbStep?.id} />;
       case 'visuals':
-        return <ImageStep stepId={currentDbStep?.id} />;
+        return <ImageStep key={currentDbStep?.id} stepId={currentDbStep?.id} />;
       case 'script':
         return <ScriptStep stepId={currentDbStep?.id} />;
       case 'scene_images':
@@ -109,10 +121,10 @@ export default function ProjectPage() {
       </Typography>
 
       <WizardLayout
+        headerPanel={project.type === 'image' ? <PostSwitcher /> : undefined}
         stepPanel={renderStep()}
         previewPanel={<PreviewPanel />}
       />
     </Box>
   );
 }
-

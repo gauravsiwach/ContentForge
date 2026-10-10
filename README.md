@@ -31,6 +31,26 @@ For image projects, ContentForge injects the generated image prompt into [`backe
 - ComfyUI image generation with live progress where ComfyUI provides it
 - Local SQLite storage, generated asset storage, and project export
 
+## Multiple posts in one project (backend foundation)
+
+Projects can own multiple post records while keeping category and Viral DNA as shared project settings. Each post has its own workflow-step state. The current backend endpoints are:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/projects/{project_id}/posts` | Create the next post in a project (no request body required) |
+| `GET` | `/api/projects/{project_id}/posts` | List posts ordered by post number |
+| `GET` | `/api/projects/{project_id}/trends` | List the project's shared trend pool and current post usage |
+| `POST` | `/api/projects/{project_id}/trends/generate` | Generate and append unique trend candidates to the project pool |
+| `GET` | `/api/projects/{project_id}/trends/usage` | List selected trend topics and the posts that used them |
+| `GET` | `/api/posts/{post_id}` | Load a post and its post-scoped steps |
+| `POST` | `/api/posts/{post_id}/navigate` | Navigate the post workflow using `{ "target_step": "caption", "skip_current": false }` |
+| `POST` | `/api/posts/{post_id}/complete` | Complete one post after its own workflow reaches review; the project is completed only when all posts are completed |
+| `PUT` | `/api/posts/{post_id}/trend` | Set or clear the post's selected project trend using `{ "trend_id": "..." }` (send `null` to clear) |
+
+Trend candidates belong to the project and are deduplicated when more are generated. Each post stores a stable trend selection; a trend is available again when no post currently selects it. Existing generated trend attempts and selections are backfilled additively at startup. Generation continues to use `/api/steps/{step_id}` for existing workflow actions. Passing the step ID returned inside a post scopes its generation attempts, selected output, caption context, and visual generation to that post. Project category and Viral DNA remain shared. Reel scene generation has post-scoped persistence, but its scene-management HTTP routes remain project-scoped and will need a follow-up before multi-post reels are ready.
+
+For image projects, Finish is post-scoped: finishing one post preserves its completed state without marking sibling posts complete. Adding a new post reopens the aggregate project status; the project returns to `completed` only after every post is completed.
+
 ## Requirements
 
 - Node.js 18+

@@ -38,7 +38,10 @@ const REEL_FORMATS: { value: ProjectFormat; label: string }[] = [
 ];
 
 export default function ReviewStep() {
-  const { project, dbSteps, setPlatform, setFormat, saveProjectUpdates, setProject, completeStep, steps } = useWizardStore();
+  const {
+    project, activePost, dbSteps, setPlatform, setFormat, saveProjectUpdates,
+    setProject, completeStep, steps, completeActivePost,
+  } = useWizardStore();
   const [captionText, setCaptionText] = useState<string | null>(null);
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -95,14 +98,20 @@ export default function ReviewStep() {
   };
 
   const handleFinish = async () => {
-    if (!project || project.status === 'completed') return;
+    const isImageProject = project?.type === 'image';
+    if (!project || (isImageProject ? activePost?.status === 'completed' : project.status === 'completed')) return;
     setFinishing(true);
     try {
-      const completedProject = await completeProject(project.id);
-      setProject(completedProject);
-      const reviewIndex = steps.findIndex((step) => step.name === 'review');
-      if (reviewIndex >= 0) completeStep(reviewIndex);
-      setSnackbar('Project accepted and marked as complete.');
+      if (isImageProject) {
+        await completeActivePost();
+        setSnackbar(`Post ${activePost?.post_number} accepted and marked as complete.`);
+      } else {
+        const completedProject = await completeProject(project.id);
+        setProject(completedProject);
+        const reviewIndex = steps.findIndex((step) => step.name === 'review');
+        if (reviewIndex >= 0) completeStep(reviewIndex);
+        setSnackbar('Project accepted and marked as complete.');
+      }
     } catch {
       setSnackbar('Could not finish the project. Complete the earlier steps first.');
     } finally {
@@ -117,6 +126,9 @@ export default function ReviewStep() {
   };
 
   const formatOptions = project?.type === 'image' ? IMAGE_FORMATS : REEL_FORMATS;
+  const isFinished = project?.type === 'image'
+    ? activePost?.status === 'completed'
+    : project?.status === 'completed';
 
   return (
     <Box>
@@ -194,9 +206,9 @@ export default function ReviewStep() {
           sx={gradientButton}
           startIcon={<CheckCircleIcon />}
           onClick={handleFinish}
-          disabled={finishing || project?.status === 'completed'}
+          disabled={finishing || isFinished || (project?.type === 'image' && !activePost)}
         >
-          {finishing ? 'Finishing...' : project?.status === 'completed' ? 'Finished' : 'Accept & Finish'}
+          {finishing ? 'Finishing...' : isFinished ? 'Finished' : 'Accept & Finish'}
         </Button>
         {imageSrc && captionText && (
           <Button

@@ -7,7 +7,6 @@ import CardContent from '@mui/material/CardContent';
 import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
-import useStepIdBridge from '../../hooks/useStepIdBridge';
 import useWizardStore from '../../store/wizardStore';
 import { listAttempts, updateStepData } from '../../api/steps';
 import GenerationLoader from '../wizard/GenerationLoader';
@@ -24,7 +23,6 @@ interface Props {
 }
 
 export default function CaptionStep({ stepId }: Props) {
-  useStepIdBridge(stepId);
   const { setPreviewData } = useWizardStore();
 
   const [attempts, setAttempts] = useState<GenerationAttempt[]>([]);
@@ -165,7 +163,7 @@ export default function CaptionStep({ stepId }: Props) {
               fullWidth
               value={editedOverlay}
               onChange={(e) => { setEditedOverlay(e.target.value); setDirty(true); }}
-              inputProps={{ maxLength: 80 }}
+              slotProps={{ htmlInput: { maxLength: 80 } }}
               helperText={`${editedOverlay.length}/80 chars`}
             />
             <TextField

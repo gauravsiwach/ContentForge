@@ -103,7 +103,7 @@ export default function StepProgress() {
           onClick={() => navigateToStep(index)}
         >
           <StepLabel
-            StepIconComponent={GlassStepIcon}
+            slots={{ stepIcon: GlassStepIcon }}
             sx={{
               '& .MuiStepLabel-label': {
                 mt: 1,

@@ -5,13 +5,15 @@ import StepProgress from './StepProgress';
 import StepNavigator from './StepNavigator';
 
 interface WizardLayoutProps {
+  headerPanel?: ReactNode;
   stepPanel: ReactNode;
   previewPanel: ReactNode;
 }
 
-export default function WizardLayout({ stepPanel, previewPanel }: WizardLayoutProps) {
+export default function WizardLayout({ headerPanel, stepPanel, previewPanel }: WizardLayoutProps) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {headerPanel}
       <StepProgress />
 
       <Box

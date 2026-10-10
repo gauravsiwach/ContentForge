@@ -1,5 +1,4 @@
-import React from 'react';
-import { Box, Typography, Slide, Snackbar } from '@mui/material';
+import { Box, Typography, Slide } from '@mui/material';
 import { glassCard } from '../../theme/glassStyles';
 import { useToastStore } from '../../store/toastStore';
 

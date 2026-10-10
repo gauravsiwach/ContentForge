@@ -1,0 +1,45 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin: 0 0 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.eyebrow {
+  margin-bottom: 0.35rem;
+  color: #a78bfa;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.select {
+  min-width: 190px;
+}
+
+@media (max-width: 640px) {
+  .container {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .select {
+    width: 100%;
+  }
+}

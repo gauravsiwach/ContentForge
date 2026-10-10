@@ -4,9 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings as app_settings
 from app.database import create_tables
+from app.migrations.add_posts import upgrade_posts
+from app.migrations.add_project_trends import upgrade_project_trends
 from app.seed import seed_categories
 from app.services.workflow import reconcile_existing_project_steps
-from app.routers import projects, categories, viral_dna, export, scenes
+from app.routers import projects, categories, viral_dna, export, scenes, posts
 from app.routers import settings as settings_router
 from app.routers import steps
 
@@ -15,6 +17,8 @@ from app.routers import steps
 async def lifespan(app: FastAPI):
     # Startup: create tables and seed
     create_tables()
+    upgrade_posts()
+    upgrade_project_trends()
     seed_categories()
     reconcile_existing_project_steps()
     yield
@@ -45,6 +49,7 @@ app.include_router(steps.router)
 app.include_router(viral_dna.router)
 app.include_router(export.router)
 app.include_router(scenes.router)
+app.include_router(posts.router)
 
 
 @app.get("/")

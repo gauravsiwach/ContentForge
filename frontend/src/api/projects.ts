@@ -1,17 +1,8 @@
 import apiClient from './client';
-import type { Project, Category } from '../types';
+import type { Project, ProjectStep, Category } from '../types';
 
-interface ProjectResponse extends Project {
-  steps: {
-    id: string;
-    project_id: string;
-    step_name: string;
-    step_order: number;
-    status: string;
-    selected_attempt_id: string | null;
-    input_data: Record<string, unknown> | null;
-    attempts: unknown[];
-  }[];
+export interface ProjectWithSteps extends Project {
+  steps: ProjectStep[];
 }
 
 interface ProjectListItem {
@@ -26,8 +17,8 @@ interface ProjectListItem {
   updated_at: string;
 }
 
-export async function createProject(type: 'image' | 'reel'): Promise<ProjectResponse> {
-  const { data } = await apiClient.post<ProjectResponse>('/api/projects', { type });
+export async function createProject(type: 'image' | 'reel'): Promise<ProjectWithSteps> {
+  const { data } = await apiClient.post<ProjectWithSteps>('/api/projects', { type });
   return data;
 }
 
@@ -36,21 +27,21 @@ export async function listProjects(): Promise<ProjectListItem[]> {
   return data;
 }
 
-export async function getProject(id: string): Promise<ProjectResponse> {
-  const { data } = await apiClient.get<ProjectResponse>(`/api/projects/${id}`);
+export async function getProject(id: string): Promise<ProjectWithSteps> {
+  const { data } = await apiClient.get<ProjectWithSteps>(`/api/projects/${id}`);
   return data;
 }
 
-export async function completeProject(id: string): Promise<ProjectResponse> {
-  const { data } = await apiClient.post<ProjectResponse>(`/api/projects/${id}/complete`);
+export async function completeProject(id: string): Promise<ProjectWithSteps> {
+  const { data } = await apiClient.post<ProjectWithSteps>(`/api/projects/${id}/complete`);
   return data;
 }
 
 export async function updateProject(
   id: string,
   updates: { category?: string; platform?: string; format?: string },
-): Promise<ProjectResponse> {
-  const { data } = await apiClient.put<ProjectResponse>(`/api/projects/${id}`, updates);
+): Promise<ProjectWithSteps> {
+  const { data } = await apiClient.put<ProjectWithSteps>(`/api/projects/${id}`, updates);
   return data;
 }
 
@@ -62,8 +53,8 @@ export async function navigateStep(
   projectId: string,
   targetStep: string,
   skipCurrent = false,
-): Promise<ProjectResponse> {
-  const { data } = await apiClient.post<ProjectResponse>(
+): Promise<ProjectWithSteps> {
+  const { data } = await apiClient.post<ProjectWithSteps>(
     `/api/projects/${projectId}/navigate`,
     { target_step: targetStep, skip_current: skipCurrent },
   );

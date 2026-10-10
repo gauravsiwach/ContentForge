@@ -28,3 +28,11 @@ class Project(Base):
     steps: Mapped[list["ProjectStep"]] = relationship(  # noqa: F821
         back_populates="project", cascade="all, delete-orphan", order_by="ProjectStep.step_order"
     )
+    posts: Mapped[list["Post"]] = relationship(  # noqa: F821
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="Post.post_number",
+    )
+    trends: Mapped[list["ProjectTrend"]] = relationship(  # noqa: F821
+        back_populates="project", cascade="all, delete-orphan", order_by="ProjectTrend.first_generated_at"
+    )

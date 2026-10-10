@@ -18,18 +18,6 @@ export default function PlaceholderStep({ title, description, stepId }: Props) {
   const [attempts, setAttempts] = useState<GenerationAttempt[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Expose stepId to StepNavigator via window bridge
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const setter = (window as Record<string, unknown>).__setStepId as ((id: string | null) => void) | undefined;
-      if (setter) setter(stepId || null);
-    }
-    return () => {
-      const setter = (window as Record<string, unknown>).__setStepId as ((id: string | null) => void) | undefined;
-      if (setter) setter(null);
-    };
-  }, [stepId]);
-
   // Load existing attempts for this step
   useEffect(() => {
     if (!stepId) return;

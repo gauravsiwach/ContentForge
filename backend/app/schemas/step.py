@@ -5,6 +5,7 @@ from app.schemas.attempt import AttemptResponse
 class StepResponse(BaseModel):
     id: str
     project_id: str
+    post_id: str | None = None
     step_name: str
     step_order: int
     status: str

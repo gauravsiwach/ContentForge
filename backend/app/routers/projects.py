@@ -98,6 +98,11 @@ def complete_project(project_id: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    if project.type == "image":
+        raise HTTPException(
+            status_code=400,
+            detail="Image projects are completed by finishing each post from its review step",
+        )
 
     review_step = next((step for step in project.steps if step.step_name == "review"), None)
     if not review_step:

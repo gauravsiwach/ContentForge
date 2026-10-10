@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -12,12 +12,12 @@ import useWizardStore from '../../store/wizardStore';
 import { glassActionBar, gradientButton } from '../../theme/glassStyles';
 import EnhanceInput from './EnhanceInput';
 import AttemptBrowser from './AttemptBrowser';
-import { generateStep, retryStep, selectAttempt } from '../../api/steps';
+import { generateStep, listAttempts, retryStep, selectAttempt } from '../../api/steps';
 import type { GenerationAttempt } from '../../types';
 
 export default function StepNavigator() {
   const {
-    currentStepIndex, steps, goBack, goNext, completeStep,
+    currentStepIndex, steps, dbSteps, goBack, goNext, completeStep,
     setImageGenerationProgress, notifyAttemptUpdated,
   } = useWizardStore();
 
@@ -26,21 +26,28 @@ export default function StepNavigator() {
   const currentStep = steps[currentStepIndex];
   const canSkip = currentStep?.optional;
 
-  // The actual DB step id comes from the project's steps — we look it up by name
-  // The wizardStore steps don't hold the DB id, so we track via a stepId from
-  // the project response. For now we derive it via ProjectPage context via store.
-  // We expose a minimal generate/retry UX that works once a step id is available.
-  const [stepId, setStepId] = useState<string | null>(null);
+  const stepId = dbSteps.find((step) => step.step_name === currentStep?.name)?.id ?? null;
   const [generating, setGenerating] = useState(false);
   const [showEnhance, setShowEnhance] = useState(false);
   const [attempts, setAttempts] = useState<GenerationAttempt[]>([]);
   const [attemptIndex, setAttemptIndex] = useState(0);
 
-  // Expose setter so ProjectPage can inject the current step's DB id
-  // (stored on window for simplicity during Phase 2 — will be refactored in Phase 3)
-  if (typeof window !== 'undefined') {
-    (window as Record<string, unknown>).__setStepId = setStepId;
-  }
+  useEffect(() => {
+    let cancelled = false;
+    if (!stepId) return;
+    listAttempts(stepId)
+      .then((items) => {
+        if (!cancelled) {
+          setAttempts(items);
+          setAttemptIndex(Math.max(0, items.findIndex((attempt) => attempt.is_selected)));
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load step attempts:', err);
+        if (!cancelled) setAttempts([]);
+      });
+    return () => { cancelled = true; };
+  }, [stepId]);
 
   const handleGenerate = async () => {
     if (!stepId) return;
@@ -158,7 +165,8 @@ export default function StepNavigator() {
   const isDnaStep = currentStep?.name === 'viral_dna';
   const isScriptStep = currentStep?.name === 'script';
   const isSceneImagesStep = currentStep?.name === 'scene_images';
-  const hidesGenerateBar = isCategoryStep || isDnaStep || isScriptStep || isSceneImagesStep;
+  const isTrendsStep = currentStep?.name === 'trends';
+  const hidesGenerateBar = isCategoryStep || isDnaStep || isScriptStep || isSceneImagesStep || isTrendsStep;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -251,7 +259,7 @@ export default function StepNavigator() {
           <Button
             variant="contained"
             endIcon={isLastStep ? undefined : <ArrowForwardIcon />}
-            onClick={() => goNext()}
+              onClick={() => { void goNext(); }}
             disabled={isLastStep}
             size="small"
             sx={gradientButton}

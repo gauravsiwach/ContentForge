@@ -23,11 +23,13 @@ export interface Project {
 export interface ProjectStep {
   id: string;
   project_id: string;
+  post_id?: string | null;
   step_name: string;
   step_order: number;
   status: StepStatus;
   selected_attempt_id: string | null;
   input_data: Record<string, unknown> | null;
+  attempts?: GenerationAttempt[];
 }
 
 export interface GenerationAttempt {
@@ -36,6 +38,7 @@ export interface GenerationAttempt {
   attempt_number: number;
   enhancement: string | null;
   provider_used: string | null;
+  model_used?: string | null;
   prompt_used: string | null;
   output_data: Record<string, unknown> | null;
   is_selected: boolean;

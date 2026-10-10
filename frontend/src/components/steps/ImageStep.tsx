@@ -10,7 +10,6 @@ import MenuItem from '@mui/material/MenuItem';
 import InputLabel from '@mui/material/InputLabel';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
-import useStepIdBridge from '../../hooks/useStepIdBridge';
 import useWizardStore from '../../store/wizardStore';
 import { listAttempts, updateStepData } from '../../api/steps';
 import { API_BASE_URL } from '../../api/client';
@@ -34,7 +33,6 @@ const STYLE_PRESETS = [
 ];
 
 export default function ImageStep({ stepId }: Props) {
-  useStepIdBridge(stepId);
   const { setPreviewData, imageGenerationProgress } = useWizardStore();
 
   const [attempts, setAttempts] = useState<GenerationAttempt[]>([]);
