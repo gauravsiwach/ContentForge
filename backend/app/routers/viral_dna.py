@@ -15,6 +15,7 @@ from app.schemas.viral_dna import (
 )
 from app.routers.settings import get_or_create_provider
 from app.viral_dna.discover import discover_viral_images
+from app.ai.image_input import ImageInputError
 from app.ai.vision import analyze_multiple_images, analyze_image_for_dna
 
 router = APIRouter(prefix="/api/projects/{project_id}/viral-dna", tags=["viral-dna"])
@@ -139,9 +140,16 @@ async def auto_discover(project_id: str, data: ViralDnaAutoRequest, db: Session 
         vision_settings = get_or_create_provider(db, "vision")
         dna_data = await analyze_multiple_images(vision_settings, image_urls, category)
         logger.info("viral_dna.auto.analysis_complete project_id=%s", project.id)
-    except Exception:
-        logger.exception("viral_dna.auto.failed project_id=%s stage=discover_or_analyze", project.id)
-        raise
+    except Exception as exc:
+        logger.warning(
+            "viral_dna.auto.failed project_id=%s stage=discover_or_analyze error_type=%s",
+            project.id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Could not discover and analyze reference images. Check the image source and configured vision provider, then try again.",
+        ) from exc
 
     return _save_profile(db, project, "auto", image_urls[:3], category, dna_data)
 
@@ -152,7 +160,26 @@ async def manual_analyze(project_id: str, data: ViralDnaManualRequest, db: Sessi
     category = project.category or "lifestyle"
 
     vision_settings = get_or_create_provider(db, "vision")
-    dna_data = await analyze_image_for_dna(vision_settings, data.url, category)
+    try:
+        dna_data = await analyze_image_for_dna(vision_settings, data.url, category)
+    except ImageInputError as exc:
+        logger.info(
+            "viral_dna.manual.rejected project_id=%s error_type=%s",
+            project.id,
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning(
+            "viral_dna.manual.analysis_failed project_id=%s provider=%s error_type=%s",
+            project.id,
+            vision_settings.provider,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="The configured vision model could not analyze this image. Check the provider, model, and logs, then try again.",
+        ) from exc
 
     return _save_profile(db, project, "manual", [data.url], category, dna_data)
 

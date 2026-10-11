@@ -2,6 +2,7 @@
 
 import uuid
 import textwrap
+import logging
 from typing import Awaitable, Callable
 import httpx
 from pathlib import Path
@@ -10,6 +11,8 @@ from app.models.settings import ProviderSettings
 from app.ai.provider import get_client
 from app.ai.comfyui_client import generate_workflow_image
 from app.config import settings as app_settings
+
+logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int | None, str], Awaitable[None]]
 
@@ -89,62 +92,86 @@ def composite_text_on_image(
     overlay_text: str,
     dna_profile: dict | None = None,
 ) -> str:
-    """
-    Render overlay_text onto a background image using Pillow.
-    """
+    """Render the post headline onto the generated background, preserving one final asset."""
     img = Image.open(image_path).convert("RGBA")
     w, h = img.size
     draw = ImageDraw.Draw(img)
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
 
-    font_size = max(36, int(w * 0.07))
+    font_size = max(24, int(w * 0.085))
+    font_path = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+    if not Path(font_path).exists():
+        font_path = "/System/Library/Fonts/Helvetica.ttc"
     try:
-        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
-        font_bold = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+        font_bold = ImageFont.truetype(font_path, font_size)
     except Exception:
-        font = ImageFont.load_default()
-        font_bold = font
+        font_bold = ImageFont.load_default()
 
-    primary_color = dna_profile.get("colors", ["#FFFFFF"])[0] if dna_profile else "#FFFFFF"
-    text_color = _contrast_color(primary_color)
-    composition = dna_profile.get("composition", "center") if dna_profile else "center"
+    profile = dna_profile or {}
+    colors = profile.get("colors") or []
+    primary_color = colors[0] if colors else "#FFFFFF"
+    text_color = _readable_dna_color(primary_color) or (255, 255, 255, 255)
+    composition = profile.get("composition", "center")
 
-    max_chars = max(10, int(w / (font_size * 0.6)))
-    lines = textwrap.wrap(overlay_text, width=max_chars)
-    line_height = font_size + 8
+    max_width = int(w * 0.82)
+    while font_size > 20:
+        try:
+            font_bold = ImageFont.truetype(font_path, font_size)
+        except Exception:
+            font_bold = ImageFont.load_default()
+        max_chars = max(8, int(max_width / max(font_size * 0.56, 1)))
+        lines = textwrap.wrap(overlay_text.strip(), width=max_chars) or [overlay_text.strip()]
+        line_width = max(draw.textbbox((0, 0), line, font=font_bold)[2] for line in lines)
+        if line_width <= max_width:
+            break
+        font_size -= 2
+
+    line_height = int(font_size * 1.2)
     total_text_h = len(lines) * line_height
 
-    if composition == "lower_third":
-        text_y = h - total_text_h - int(h * 0.10)
+    if composition in ("rule_of_thirds", "lower_third", "dynamic"):
+        text_y = h - total_text_h - int(h * 0.12)
     else:
         text_y = (h - total_text_h) // 2
 
-    shadow_offset = max(2, font_size // 18)
-    shadow_color = (0, 0, 0, 180)
+    text_y = max(int(h * 0.08), min(text_y, h - total_text_h - int(h * 0.08)))
+    padding_x, padding_y = int(w * 0.055), int(h * 0.035)
+    widest = max(draw.textbbox((0, 0), line, font=font_bold)[2] for line in lines)
+    box_left = max(0, (w - widest) // 2 - padding_x)
+    box_right = min(w, (w + widest) // 2 + padding_x)
+    overlay_draw.rounded_rectangle(
+        (box_left, text_y - padding_y, box_right, text_y + total_text_h + padding_y),
+        radius=max(8, int(w * 0.025)),
+        fill=(0, 0, 0, 105),
+    )
 
     for i, line in enumerate(lines):
         bbox = draw.textbbox((0, 0), line, font=font_bold)
         line_w = bbox[2] - bbox[0]
         x = (w - line_w) // 2
         y = text_y + i * line_height
-        draw.text((x + shadow_offset, y + shadow_offset), line, font=font_bold, fill=shadow_color)
-        draw.text((x, y), line, font=font_bold, fill=text_color)
+        overlay_draw.text((x, y), line, font=font_bold, fill=text_color)
 
-    assets_dir = Path(app_settings.ASSETS_DIR)
-    assets_dir.mkdir(parents=True, exist_ok=True)
-    out_path = assets_dir / f"{uuid.uuid4()}_composited.png"
-    img = img.convert("RGB")
-    img.save(str(out_path), "PNG")
-    return str(out_path)
+    path = Path(image_path)
+    temp_path = path.with_name(f"{path.stem}_overlay_tmp.png")
+    Image.alpha_composite(img, overlay).convert("RGB").save(str(temp_path), "PNG")
+    temp_path.replace(path)
+    logger.info("image.headline_composited path=%s dimensions=%sx%s", path.name, w, h)
+    return str(path)
 
-def _contrast_color(hex_color: str) -> tuple:
-    """Return white or black RGBA based on luminance of the given hex color."""
+
+def _readable_dna_color(value: str) -> tuple | None:
+    """Use a valid DNA accent only when it remains readable over the headline scrim."""
     try:
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        return (0, 0, 0, 255) if luminance > 0.55 else (255, 255, 255, 255)
-    except Exception:
-        return (255, 255, 255, 255)
+        color = value.lstrip("#")
+        if len(color) != 6:
+            return None
+        rgb = tuple(int(color[i : i + 2], 16) for i in (0, 2, 4))
+        return (*rgb, 255) if sum(rgb) / (3 * 255) > 0.68 else (255, 255, 255, 255)
+    except (AttributeError, ValueError):
+        return None
+
 
 def build_image_prompt(
     category: str,
@@ -152,20 +179,73 @@ def build_image_prompt(
     dna_profile: dict | None = None,
     style_preset: str = "minimal",
     enhancement: str | None = None,
+    trend_topic: str | None = None,
+    background_only: bool = True,
 ) -> str:
-    """Build an optimized image prompt from content context."""
+    """Build a scene-focused image prompt; the app renders the headline separately."""
     style_descriptions = {
-        "minimal": "clean minimal design, white space, professional",
-        "bold": "bold typography, high contrast, vibrant colors, energetic",
-        "cinematic": "cinematic lighting, dramatic shadows, photorealistic, moody atmosphere",
-        "flat": "flat design, geometric shapes, pastel colors, modern illustration",
+        "minimal": "minimal, restrained detail, generous negative space",
+        "bold": "bold shapes, strong contrast, confident color",
+        "cinematic": "cinematic light, depth, dramatic but natural shadows",
+        "flat": "flat illustration, clean geometry, simple shapes",
     }
-    style_desc = style_descriptions.get(style_preset, style_descriptions["minimal"])
-    mood = f", {dna_profile.get('mood', 'energetic')} mood" if dna_profile else ""
-    caption_context = f", inspired by: {caption[:80]}" if caption else ""
-    enhancement_context = f", {enhancement}" if enhancement else ""
+    profile = dna_profile or {}
+    colors = [color for color in profile.get("colors", [])[:5] if isinstance(color, str)]
+    selected_style = style_preset if style_preset in style_descriptions else "minimal"
+    topic = " ".join((trend_topic or "").split())
+    scene = " ".join((caption or "").split())
+    user_direction = " ".join((enhancement or "").split())
+    mood = profile.get("mood")
+    composition = profile.get("composition")
+    topic_key = topic.casefold().replace("&", "and")
 
-    return (
-        f"Social media {category} content image, {style_desc}{mood}{caption_context}"
-        f"{enhancement_context}. No text or watermarks. Square format, high quality."
-    )
+    # This topic has a reviewed, concrete visual direction. Keep it scoped to this
+    # trend so other motivation topics do not all inherit the same metaphor.
+    if topic_key == "small wins and celebrating progress":
+        color_names = {
+            "#0066cc": "deep blue",
+            "#ff4d4f": "coral-red",
+            "#ffffff": "white",
+            "#808080": "grey",
+            "#f0f0f0": "soft-grey",
+        }
+        palette = [
+            f"{color_names.get(color.casefold(), color)} ({color})"
+            for color in colors
+        ]
+        dominant = palette[0] if palette else "deep blue (#0066cc)"
+        accents = ", ".join(palette[1:]) or "coral-red, white, and soft-grey"
+        selected_mood = mood.strip() if isinstance(mood, str) and mood.strip() else "inspiring"
+        directions = [
+            f"Create an original square 1:1 {selected_style} ({style_descriptions[selected_style]}) social-media image about {topic.casefold()}.",
+            "A small green shoot grows from a crack beside a few ascending blue stone steps, catching a beam of warm morning light.",
+            "Place the shoot in the lower-right third, with the steps leading the eye upward.",
+            f"Use {dominant} as the dominant color, with restrained {accents} accents.",
+            f"Natural dramatic shadows, realistic stone texture, atmospheric depth, {selected_mood} mood, clean professional art direction.",
+            "Keep the upper-left area simple and uncluttered for a headline to be added later.",
+        ]
+    else:
+        directions = [f"Create an original square 1:1 {selected_style} social-media image about {topic or category}."]
+        if scene:
+            directions.append(f"Show this scene: {scene}.")
+        else:
+            directions.append("Represent the concept with one specific, original scene and a clear focal point.")
+        directions.append(style_descriptions[selected_style] + ".")
+        if isinstance(mood, str) and mood.strip():
+            directions.append(f"Mood: {mood.strip()}.")
+        if colors:
+            directions.append(f"Use {colors[0]} as the dominant color, with restrained accents from {', '.join(colors[1:]) or 'the same palette'}.")
+        if isinstance(composition, str) and composition.strip():
+            directions.append(f"Composition: {composition.strip()}.")
+
+    if profile:
+        directions.append("Use Visual DNA as inspiration, not as a template.")
+    if user_direction:
+        directions.append(f"Additional visual direction: {user_direction}.")
+    if background_only:
+        directions.append(
+            "Background artwork only: absolutely no text, letters, numbers, signs, logos, watermarks, or text-like marks."
+        )
+    prompt = "\n".join(directions)
+    logger.info("prompt build -> %s", prompt)
+    return prompt

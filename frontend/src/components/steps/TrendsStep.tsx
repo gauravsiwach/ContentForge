@@ -180,6 +180,12 @@ export default function TrendsStep({
 
   const selectedPoolTrend = trends.find((trend) => trend.id === selectedId)
     ?? trends.find((trend) => normalizeTopic(trend.topic) === normalizeTopic(selectedText ?? ''));
+  const sortedTrends = [...trends].sort((a, b) => {
+    if (a.score === null && b.score === null) return 0;
+    if (a.score === null) return 1;
+    if (b.score === null) return -1;
+    return b.score - a.score;
+  });
 
   return (
     <Box className={styles.root}>
@@ -189,6 +195,9 @@ export default function TrendsStep({
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Generate ideas once for this project, then assign an available topic to each post.
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+          Suggestions use this project’s Viral DNA for creative fit. They are not verified live trends; the score estimates fit, not popularity.
         </Typography>
       </Box>
 
@@ -209,7 +218,7 @@ export default function TrendsStep({
         </Box>
       ) : (
         <Box className={styles.trendList} component="ul">
-          {trends.map((trend) => {
+          {sortedTrends.map((trend) => {
             const isSelected = trend.id === selectedId
               || (!selectedId && normalizeTopic(trend.topic) === normalizeTopic(selectedText ?? ''));
             const usedByOthers = trend.used_by_posts.filter((post) => post.post_id !== postId);
@@ -227,7 +236,7 @@ export default function TrendsStep({
                 >
                   <span className={styles.cardHeading}>
                     <span className={styles.topic}>{trend.topic}</span>
-                    {trend.score !== null && <span className={styles.score}>{trend.score}</span>}
+                    {trend.score !== null && <span className={styles.score}>Fit {trend.score}</span>}
                   </span>
                   {trend.description && <span className={styles.description}>{trend.description}</span>}
                   <span className={styles.cardFooter}>

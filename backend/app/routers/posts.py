@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Post, Project, ProjectStep, ProjectTrend
+from app.models.viral_dna import ViralDnaProfile
 from app.schemas.post import (
     PostListResponse,
     PostCompletionResponse,
@@ -131,8 +132,17 @@ def list_project_trends(project_id: str, db: Session = Depends(get_db)):
 async def generate_project_trends(project_id: str, db: Session = Depends(get_db)):
     project = _get_project_or_404(db, project_id)
     settings = get_or_create_provider(db, "text")
+    dna_profile = None
+    if project.viral_dna_id:
+        profile = db.query(ViralDnaProfile).filter(ViralDnaProfile.id == project.viral_dna_id).first()
+        dna_profile = profile.dna_data if profile else None
     try:
-        output = await generate_trends(settings, project.category or "lifestyle", project.platform or "instagram")
+        output = await generate_trends(
+            settings,
+            project.category or "lifestyle",
+            project.platform or "instagram",
+            dna_profile,
+        )
         topics = output.get("topics", [])
         if not isinstance(topics, list):
             raise ValueError("The text provider returned an invalid trend list")

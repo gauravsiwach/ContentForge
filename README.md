@@ -47,7 +47,7 @@ Projects can own multiple post records while keeping category and Viral DNA as s
 | `POST` | `/api/posts/{post_id}/complete` | Complete one post after its own workflow reaches review; the project is completed only when all posts are completed |
 | `PUT` | `/api/posts/{post_id}/trend` | Set or clear the post's selected project trend using `{ "trend_id": "..." }` (send `null` to clear) |
 
-Trend candidates belong to the project and are deduplicated when more are generated. Each post stores a stable trend selection; a trend is available again when no post currently selects it. Existing generated trend attempts and selections are backfilled additively at startup. Generation continues to use `/api/steps/{step_id}` for existing workflow actions. Passing the step ID returned inside a post scopes its generation attempts, selected output, caption context, and visual generation to that post. Project category and Viral DNA remain shared. Reel scene generation has post-scoped persistence, but its scene-management HTTP routes remain project-scoped and will need a follow-up before multi-post reels are ready.
+Trend candidates belong to the project and are deduplicated when more are generated. Trend suggestions receive the full shared Viral DNA profile as creative-fit guidance; they are model-generated ideas, not verified live trends or measured engagement scores. Each post stores a stable trend selection; a trend is available again when no post currently selects it. Existing generated trend attempts and selections are backfilled additively at startup. Generation continues to use `/api/steps/{step_id}` for existing workflow actions. Passing the step ID returned inside a post scopes its generation attempts, selected output, caption context, and visual generation to that post. Project category and Viral DNA remain shared. Reel scene generation has post-scoped persistence, but its scene-management HTTP routes remain project-scoped and will need a follow-up before multi-post reels are ready.
 
 For image projects, Finish is post-scoped: finishing one post preserves its completed state without marking sibling posts complete. Adding a new post reopens the aggregate project status; the project returns to `completed` only after every post is completed.
 
@@ -83,7 +83,7 @@ ollama pull gemma3:4b
 curl http://127.0.0.1:11434/v1/models
 ```
 
-For optional local vision analysis, pull and configure an Ollama vision-capable model as well. If no vision model is configured, the Viral DNA step uses its built-in fallback profile instead of a paid vision API.
+For local vision analysis, configure the Vision task to use an image-capable Ollama model such as `gemma3:4b` or `qwen3-vl:4b`. Viral DNA downloads a public HTTPS image URL, validates it, and sends the image to the configured vision provider as base64 data. The analysis fails visibly rather than marking the step complete with a fabricated fallback profile when an image or provider cannot be analyzed.
 
 ### 3. Start the backend
 

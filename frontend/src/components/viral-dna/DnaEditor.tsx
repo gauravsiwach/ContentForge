@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
 import type { ViralDnaProfile } from '../../api/viralDna';
 
 interface Props {
@@ -18,8 +19,17 @@ export default function DnaEditor({ profile, onSave, onCancel, saving }: Props) 
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2 }}>
+      <Box>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Adjust creative direction
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Change the tone, overall look, or viewer action. These choices guide your post; they do not change the reference-image observations above.
+        </Typography>
+      </Box>
       <TextField
-        label="Mood"
+        label="Feeling / tone"
+        helperText="For example: inspiring, calm, energetic, or humorous."
         size="small"
         value={mood}
         onChange={(e) => setMood(e.target.value)}
@@ -32,6 +42,7 @@ export default function DnaEditor({ profile, onSave, onCancel, saving }: Props) 
       />
       <TextField
         label="Visual style"
+        helperText="For example: cinematic, editorial, lifestyle, or minimal."
         size="small"
         value={style}
         onChange={(e) => setStyle(e.target.value)}
@@ -43,7 +54,8 @@ export default function DnaEditor({ profile, onSave, onCancel, saving }: Props) 
         }}
       />
       <TextField
-        label="CTA style"
+        label="Call to action"
+        helperText="What should viewers do? Use “None” if the post should not ask for an action."
         size="small"
         value={cta}
         onChange={(e) => setCta(e.target.value)}

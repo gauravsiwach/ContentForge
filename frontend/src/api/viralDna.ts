@@ -15,6 +15,11 @@ export interface ViralDnaProfile {
     composition?: string;
     text_overlay?: boolean;
     face_visible?: boolean;
+    lighting?: string;
+    typography?: string;
+    visible_text_summary?: string;
+    attention_hierarchy?: string;
+    creative_direction?: string;
     [key: string]: unknown;
   };
 }

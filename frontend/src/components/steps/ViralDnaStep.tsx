@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -14,6 +15,13 @@ import type { ViralDnaProfile } from '../../api/viralDna';
 import DnaProfile from '../viral-dna/DnaProfile';
 import DnaEditor from '../viral-dna/DnaEditor';
 import GenerationLoader from '../wizard/GenerationLoader';
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError<{ detail?: string }>(error)) {
+    return error.response?.data?.detail || error.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function ViralDnaStep() {
   const { project, steps, completeStep } = useWizardStore();
@@ -42,8 +50,8 @@ export default function ViralDnaStep() {
       const result = await autoDiscoverDna(project.id, project.category || undefined);
       setProfile(result);
       markStepComplete();
-    } catch {
-      setError('Auto-discover failed. Try again or paste a URL instead.');
+    } catch (error: unknown) {
+      setError(errorMessage(error, 'Auto-discover failed. Try again or paste a URL instead.'));
     } finally {
       setLoading(false);
     }
@@ -59,8 +67,8 @@ export default function ViralDnaStep() {
       markStepComplete();
       setShowUrlInput(false);
       setUrl('');
-    } catch {
-      setError('Could not analyze that URL. Check it points to an accessible image.');
+    } catch (error: unknown) {
+      setError(errorMessage(error, 'Could not analyze that URL. Check it points to an accessible image.'));
     } finally {
       setLoading(false);
     }

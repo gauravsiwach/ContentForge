@@ -104,11 +104,20 @@ async def generate_trends(
     settings: ProviderSettings,
     category: str,
     platform: str = "instagram",
+    dna_profile: dict | None = None,
 ) -> dict:
-    """Generate trending topics for a category using GPT-4o."""
+    """Generate trend ideas using category/platform context and optional shared Viral DNA."""
     logger.info(f"Generating trends for category: {category} on {platform}")
     client = get_client(settings)
     model = settings.model or "gpt-4o"
+    dna_context = (
+        "\nReference-image Viral DNA profile (use as creative guidance; do not copy wording):\n"
+        f"<viral_dna>{json.dumps(dna_profile, ensure_ascii=False, sort_keys=True)}</viral_dna>\n"
+        "Use the full profile to shape the visual/emotional framing and hook mechanisms of the ideas. "
+        "Do not treat the profile as evidence that a topic is currently popular or performs well."
+        if dna_profile
+        else ""
+    )
 
     try:
         response = await client.chat.completions.create(
@@ -120,8 +129,9 @@ async def generate_trends(
                 },
                 {
                     "role": "user",
-                    "content": f"""List 6 currently trending topics in the {category} niche on {platform}.
-For each topic provide a virality score (0-100).
+                    "content": f"""Suggest 6 trend-inspired content topic ideas for the {category} niche on {platform}.
+{dna_context}
+For each topic provide a relevance score (0-100) and a brief description of the content angle. Do not claim a score is measured engagement or verified live trend data.
 
 Respond in this exact JSON format:
 {{

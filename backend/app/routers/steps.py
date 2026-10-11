@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import uuid
 from typing import Awaitable, Callable
 
@@ -14,7 +15,7 @@ from app.schemas.attempt import AttemptResponse
 from app.schemas.step import StepResponse
 from app.routers.settings import get_or_create_provider
 from app.ai.text import generate_content, generate_trends, generate_script
-from app.ai.image import generate_images, build_image_prompt
+from app.ai.image import composite_text_on_image, generate_images, build_image_prompt
 from app.services.trends import upsert_project_trends, select_trend_for_post
 from pydantic import BaseModel
 
@@ -121,7 +122,7 @@ def _get_selected_trend(db: Session, step_context: ProjectStep) -> str | None:
 
 
 def _get_selected_caption_text(db: Session, step_context: ProjectStep) -> str | None:
-    """Return the approved overlay_text from the content step for use in image prompt building."""
+    """Return the selected short headline, not the longer feed caption."""
     step = _get_step_by_name(db, step_context.project_id, "caption", step_context.post_id)
     if not step:
         return None
@@ -141,7 +142,7 @@ def _get_selected_caption_text(db: Session, step_context: ProjectStep) -> str | 
     variants = attempt.output_data.get("variants", [])
     idx = (step.input_data or {}).get("selected_variant", 0)
     if variants and idx < len(variants):
-        return variants[idx].get("overlay_text") or variants[idx].get("feed_caption")
+        return variants[idx].get("overlay_text")
     return None
 
 
@@ -387,7 +388,8 @@ async def _generate_output_for_step(
 
     if step.step_name == "trends":
         settings = get_or_create_provider(db, "text")
-        data = await generate_trends(settings, category, platform)
+        dna_profile = _get_dna_profile(db, project)
+        data = await generate_trends(settings, category, platform, dna_profile)
         return {"type": "trends", "_provider": settings.provider, "_model": settings.model, **data}
 
     if step.step_name == "caption":
@@ -401,11 +403,42 @@ async def _generate_output_for_step(
         settings = get_or_create_provider(db, "image")
         dna_profile = _get_dna_profile(db, project)
         caption_text = _get_selected_caption_text(db, step)
+        trend_topic = _get_selected_trend(db, step)
         style_preset = (step.input_data or {}).get("style_preset", "minimal")
-        prompt = build_image_prompt(category, caption_text, dna_profile, style_preset, enhancement)
+        prompt = build_image_prompt(
+            category,
+            dna_profile=dna_profile,
+            style_preset=style_preset,
+            enhancement=enhancement,
+            trend_topic=trend_topic,
+            background_only=True,
+        )
+        started_at = time.perf_counter()
+        logger.info(
+            "image_generation.started project_id=%s post_id=%s step_id=%s has_dna=%s has_title=%s",
+            project.id,
+            step.post_id,
+            step.id,
+            bool(dna_profile),
+            bool(caption_text),
+        )
         images = await generate_images(
             settings, prompt, size="1024x1024", n=1,
             progress_callback=progress_callback,
+        )
+        if caption_text:
+            for image in images:
+                local_path = image.get("local_path")
+                if local_path:
+                    composite_text_on_image(local_path, caption_text, dna_profile)
+        logger.info(
+            "image_generation.completed project_id=%s post_id=%s step_id=%s image_count=%d duration_ms=%d headline_composited=%s",
+            project.id,
+            step.post_id,
+            step.id,
+            len(images),
+            round((time.perf_counter() - started_at) * 1000),
+            bool(caption_text and images),
         )
         return {
             "type": "image",

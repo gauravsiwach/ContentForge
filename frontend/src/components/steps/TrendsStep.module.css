@@ -65,7 +65,7 @@
 }
 
 .unavailable {
-  opacity: 0.62;
+  opacity: 0.76;
 }
 
 .cardHeading,
@@ -86,6 +86,11 @@
   color: #a78bfa;
   font-size: 0.8rem;
   font-weight: 700;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.1);
 }
 
 .description {

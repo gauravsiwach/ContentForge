@@ -1,6 +1,4 @@
-"""Viral DNA auto-discovery — find popular content images for a category."""
-
-import httpx
+"""Viral DNA auto-discovery — find image references for a category."""
 
 CATEGORY_SEARCH_TERMS = {
     "Fitness": "fitness motivation workout viral instagram",
@@ -36,15 +34,3 @@ def _get_unsplash_urls(search_term: str, limit: int) -> list[str]:
         # Unsplash source provides random images by keyword with a seed
         urls.append(f"https://source.unsplash.com/800x800/?{keywords}&sig={i}")
     return urls
-
-
-async def fetch_image_as_base64(url: str) -> str | None:
-    """Download image and convert to base64 for vision analysis."""
-    import base64
-    try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return base64.b64encode(response.content).decode()
-    except Exception:
-        return None
